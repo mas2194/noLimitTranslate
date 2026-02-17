@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@theme {
+  /* Golden Ratio Scale (Base 16px) */
+  --text-base: 1rem;
+  --text-md: 1.618rem;
+  --text-lg: 2.618rem;
+  --text-xl: 4.236rem;
+
+  --spacing-gr-1: 0.618rem;
+  --spacing-gr-2: 1rem;
+  --spacing-gr-3: 1.618rem;
+  --spacing-gr-4: 2.618rem;
+  --spacing-gr-5: 4.236rem;
+
+  /* Colors for Light Theme */
+  --color-primary: #0f172a;
+  /* Slate 900 */
+  --color-accent: #3b82f6;
+  /* Blue 500 */
+  --color-surface: #ffffff;
+  --color-surface-alt: #f1f5f9;
+  /* Slate 100 */
+}
+
+:root {
+  --background: #f8fafc;
+  /* Slate 50 */
+  --foreground: #0f172a;
+  /* Slate 900 */
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Light Mode Utilities */
+@utility card-panel {
+  background: var(--color-surface);
+  border: 1px solid #e2e8f0;
+  /* Slate 200 */
+  box-shadow:
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
+
+  &:hover {
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    border-color: #cbd5e1;
+    /* Slate 300 */
+  }
+}
+
+@utility input-field {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-primary);
+}
+
+@utility primary-button {
+  background: var(--color-primary);
+  color: white;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #1e293b;
+    /* Slate 800 */
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  &:disabled {
+    background: #94a3b8;
+    /* Slate 400 */
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+@utility select-trigger {
+  background: var(--color-surface-alt);
+  color: #334155;
+  /* Slate 700 */
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #e2e8f0;
+    /* Slate 200 */
+  }
+
+  &:focus-within {
+    background: white;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+}
+
+/* Custom Scrollbar (Light) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  /* Slate 300 */
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  /* Slate 400 */
+}
