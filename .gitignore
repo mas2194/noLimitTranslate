@@ -48,6 +48,8 @@ node_modules/
 /playwright/.cache/
 /playwright/.auth/
 
-# # models
-/public/models/
-tmp 
+# models
+/public/models/*
+!/public/models/*.md
+!/public/models/.gitkeep
+tmp
