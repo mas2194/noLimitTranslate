@@ -76,27 +76,36 @@ export function StatusBanner({ onInitialize }: StatusBannerProps) {
                         exit={{ opacity: 0, y: -10 }}
                         className="card-panel p-[var(--spacing-gr-2)] rounded-[var(--spacing-gr-2)] flex flex-col gap-4 relative overflow-hidden bg-white"
                     >
-                        <div className="flex items-center gap-4 relative z-10">
-                            <div className="p-3 bg-blue-50 rounded-full border border-blue-100/50">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 relative z-10">
+                            <div className="p-3 bg-blue-50 rounded-full border border-blue-100/50 shrink-0 hidden sm:block">
                                 <Download className="w-6 h-6 text-blue-500" />
                             </div>
-                            <div className="flex-1">
-                                <h3 className="font-bold text-slate-800 tracking-wide text-lg flex items-center gap-2">
-                                    {mainTitle}
-                                    <span className="text-xs font-normal bg-blue-100 border border-blue-200 px-2 py-0.5 rounded text-blue-600 uppercase">
-                                        {status === 'loading' ? (loadingInfo?.file?.includes('onnx') ? 'WebGPU/WASM' : 'Loading') : 'ready'}
-                                    </span>
-                                    {isDownloading && (
-                                        <span className="text-xs font-normal bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-500">~2.5GB</span>
-                                    )}
-                                </h3>
-                                <p className="text-sm text-slate-500 font-normal">
+                            <div className="flex-1 min-w-0 w-full">
+                                <div className="flex flex-wrap items-center gap-2 mb-1">
+                                    <h3 className="font-bold text-slate-800 tracking-wide text-base sm:text-lg whitespace-nowrap">
+                                        {mainTitle}
+                                    </h3>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        <span className="text-[10px] sm:text-xs font-normal bg-blue-100 border border-blue-200 px-2 py-0.5 rounded text-blue-600 uppercase">
+                                            {status === 'loading' ? (loadingInfo?.file?.includes('onnx') ? 'WebGPU/WASM' : 'Loading') : 'ready'}
+                                        </span>
+                                        {isDownloading && (
+                                            <span className="text-[10px] sm:text-xs font-normal bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-500">~2.5GB</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-xs sm:text-sm text-slate-500 font-normal truncate">
                                     {subTitle}
                                 </p>
                             </div>
-                            <span className="font-mono text-xl font-bold text-blue-600 tabular-nums">
-                                {Math.round(progress)}%
-                            </span>
+                            <div className="flex items-center justify-between w-full sm:w-auto sm:block">
+                                <div className="p-2 bg-blue-50 rounded-full border border-blue-100/50 sm:hidden">
+                                    <Download className="w-5 h-5 text-blue-500" />
+                                </div>
+                                <span className="font-mono text-lg sm:text-xl font-bold text-blue-600 tabular-nums">
+                                    {Math.round(progress)}%
+                                </span>
+                            </div>
                         </div>
 
                         <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
