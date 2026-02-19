@@ -9,7 +9,7 @@ import { TranslationOutput } from "@/components/translation/TranslationOutput";
 import { ArrowRightLeft } from "lucide-react";
 
 export default function Home() {
-  const { translate, loadModel } = useWorker();
+  const { translate, loadModel, stop } = useWorker();
   const { status, input, sourceLang, targetLang, swapLanguages } = useTranslationStore();
 
   const handleTranslate = () => {
@@ -35,7 +35,11 @@ export default function Home() {
         <StatusBanner onInitialize={loadModel} />
 
         <div className="flex flex-col md:grid md:grid-cols-2 gap-[var(--spacing-gr-3)] relative">
-          <TranslationInput onTranslate={handleTranslate} isTranslating={isTranslating} />
+          <TranslationInput
+            onTranslate={handleTranslate}
+            onStop={stop}
+            isTranslating={isTranslating}
+          />
 
           {/* Swap Button - Center positioned on desktop, between cards on mobile */}
           <div className="flex justify-center items-center md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 z-20 py-2 md:py-0">

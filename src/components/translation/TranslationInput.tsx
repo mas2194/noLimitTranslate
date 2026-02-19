@@ -1,15 +1,16 @@
 "use client";
 
-import { ArrowRightLeft, Languages } from "lucide-react";
+import { ArrowRightLeft, Languages, Square } from "lucide-react";
 import { useTranslationStore } from "@/lib/store";
 import { SUPPORTED_LANGUAGES } from "@/lib/languages";
 
 interface Props {
     onTranslate: () => void;
+    onStop: () => void;
     isTranslating: boolean;
 }
 
-export function TranslationInput({ onTranslate, isTranslating }: Props) {
+export function TranslationInput({ onTranslate, onStop, isTranslating }: Props) {
     const { input, setInput, sourceLang, setLanguages, targetLang, status } = useTranslationStore();
     const isLoading = status === 'loading';
 
@@ -44,23 +45,24 @@ export function TranslationInput({ onTranslate, isTranslating }: Props) {
             />
 
             <div className="flex justify-end pt-[var(--spacing-gr-2)]">
-                <button
-                    onClick={onTranslate}
-                    disabled={isLoading || isTranslating || !input.trim()}
-                    className="primary-button group/btn px-[var(--spacing-gr-4)] py-3 rounded-xl flex items-center gap-3 font-medium text-sm"
-                >
-                    {isTranslating ? (
-                        <>
-                            <span className="relative z-10 w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            <span>Translating...</span>
-                        </>
-                    ) : (
-                        <>
-                            <span>Translate</span>
-                            <ArrowRightLeft className="w-4 h-4 group-hover/btn:rotate-180 transition-transform duration-500" />
-                        </>
-                    )}
-                </button>
+                {isTranslating ? (
+                    <button
+                        onClick={onStop}
+                        className="bg-red-500 hover:bg-red-600 text-white px-[var(--spacing-gr-4)] py-3 rounded-xl flex items-center gap-3 font-medium text-sm transition-colors shadow-lg hover:shadow-red-500/30"
+                    >
+                        <Square className="w-4 h-4 fill-current" />
+                        <span>Stop Generating</span>
+                    </button>
+                ) : (
+                    <button
+                        onClick={onTranslate}
+                        disabled={isLoading || !input.trim()}
+                        className="primary-button group/btn px-[var(--spacing-gr-4)] py-3 rounded-xl flex items-center gap-3 font-medium text-sm"
+                    >
+                        <span>Translate</span>
+                        <ArrowRightLeft className="w-4 h-4 group-hover/btn:rotate-180 transition-transform duration-500" />
+                    </button>
+                )}
             </div>
         </div>
     );

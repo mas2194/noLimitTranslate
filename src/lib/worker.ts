@@ -68,7 +68,7 @@ env.localModelPath = '/models/';
 
 // Define message types
 export interface WorkerMessage {
-    type: 'load' | 'translate';
+    type: 'load' | 'translate' | 'abort';
     data?: {
         text?: string;
         src_lang?: string;
@@ -77,7 +77,7 @@ export interface WorkerMessage {
 }
 
 export interface WorkerResponse {
-    status: 'loading' | 'ready' | 'translating' | 'done' | 'error';
+    status: 'loading' | 'ready' | 'translating' | 'done' | 'stopped' | 'error';
     data?: unknown;
     device?: 'webgpu' | 'cpu';
     model?: string;
@@ -210,10 +210,16 @@ export const splitTextIntoChunks = (text: string, maxLength: number): string[] =
     return chunks;
 };
 
+let currentAbortController: AbortController | null = null;
+
 // Listen for messages from the main thread
 self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
     console.log("Worker: Received message:", JSON.stringify(event.data));
+
+
+
     const { type, data } = event.data;
+    let lastOutput = "";
 
     try {
         if (type === 'load') {
@@ -234,7 +240,20 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
                 device: TranslationPipeline.activeDevice,
                 model: TranslationPipeline.activeModel
             } as WorkerResponse);
+        } else if (type === 'abort') {
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+                console.log("Worker: Translation aborted.");
+            }
         } else if (type === 'translate') {
+            // Cancel previous if any (though UI should prevent this usually)
+            if (currentAbortController) {
+                currentAbortController.abort();
+            }
+            currentAbortController = new AbortController();
+            const signal = currentAbortController.signal;
+
             const generator = await TranslationPipeline.getInstance();
             const text = data?.text || '';
             const src_lang = data?.src_lang || 'English';
@@ -260,15 +279,22 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
             console.log(`Worker: Split text into ${totalChunks} chunks.`);
 
             let fullTranslation = "";
+            lastOutput = "";
 
             for (let i = 0; i < totalChunks; i++) {
+                if (signal.aborted) {
+                    console.log("Worker: Abort signal detected. Stopping loop.");
+                    self.postMessage({ status: 'done', output: fullTranslation } as WorkerResponse);
+                    return;
+                }
                 const chunk = chunks[i];
                 console.log(`Worker: Translating chunk ${i + 1}/${totalChunks} (Length: ${chunk.length})`);
 
                 // Notify progress (optional, but good for UX if supported by frontend)
+                lastOutput = fullTranslation + (fullTranslation ? "\n\n" : "") + `[Translating chunk ${i + 1}/${totalChunks}...]`;
                 self.postMessage({
                     status: 'translating',
-                    output: fullTranslation + (fullTranslation ? "\n\n" : "") + `[Translating chunk ${i + 1}/${totalChunks}...]`
+                    output: lastOutput
                 } as WorkerResponse);
 
                 let chunkTranslation = "";
@@ -310,9 +336,9 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
                         do_sample: false,
                         return_full_text: false,
                         callback_function: (x: any) => {
-                            // We don't stream individual chunk progress to main thread efficiently here 
-                            // because we are in a loop.
-                            // Maybe we could, but let's keep it simple: wait for chunk to finish.
+                            if (currentAbortController?.signal.aborted) {
+                                throw new Error("AbortError");
+                            }
                         }
                     } as any);
 
@@ -332,15 +358,36 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
                 }
 
                 fullTranslation += (fullTranslation ? "\n\n" : "") + chunkTranslation;
+                lastOutput = fullTranslation;
 
                 // Send intermediate result so user sees something happening
                 self.postMessage({ status: 'translating', output: fullTranslation } as WorkerResponse);
             }
 
+            if (signal.aborted) {
+                console.log("Worker: Aborted after loop.");
+                self.postMessage({ status: 'done', output: fullTranslation } as WorkerResponse);
+                return;
+            }
+
             console.log("Worker: All chunks translated.");
             self.postMessage({ status: 'done', output: fullTranslation } as WorkerResponse);
+            currentAbortController = null;
         }
     } catch (err: unknown) {
+        if (String(err).includes("AbortError")) {
+            console.log("Worker: Translation Process Aborted via Callback");
+            // We can return the partial translation we have so far? 
+            // Accessing 'fullTranslation' here is hard because it's inside the try block scope but we are in catch.
+            // However, we just sent the latest update via postMessage anyway.
+            // So we just send 'done'.
+            self.postMessage({
+                status: 'stopped',
+                output: lastOutput
+            } as WorkerResponse);
+            return;
+        }
+
         console.error("Worker Error:", err);
         self.postMessage({
             status: 'error',

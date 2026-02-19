@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function TranslationOutput({ isTranslating }: Props) {
-    const { output, targetLang, setLanguages, sourceLang } = useTranslationStore();
+    const { output, targetLang, setLanguages, sourceLang, status } = useTranslationStore();
 
     const handleCopy = () => {
         if (output) navigator.clipboard.writeText(output);
@@ -53,6 +53,9 @@ export function TranslationOutput({ isTranslating }: Props) {
                         {output}
                         {isTranslating && (
                             <span className="inline-block w-2 h-6 ml-1 bg-blue-500 animate-pulse align-middle rounded-full" />
+                        )}
+                        {status === 'stopped' && (
+                            <span className="block mt-2 text-sm font-medium text-red-500 italic">[Stopped]</span>
                         )}
                     </p>
                 ) : (

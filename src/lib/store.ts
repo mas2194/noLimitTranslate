@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 
 interface TranslationState {
-    status: 'idle' | 'loading' | 'ready' | 'translating' | 'done' | 'error';
+    status: 'idle' | 'loading' | 'ready' | 'translating' | 'done' | 'stopped' | 'error';
     device: 'webgpu' | 'cpu' | null;
     model: string | null; // Track active model name
     progress: number;
