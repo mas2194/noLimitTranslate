@@ -153,6 +153,63 @@ class TranslationPipeline {
     }
 }
 
+// Function to split text into chunks
+export const splitTextIntoChunks = (text: string, maxLength: number): string[] => {
+    const chunks: string[] = [];
+    let currentChunk = "";
+
+    // Split by paragraphs first
+    const paragraphs = text.split(/\n\s*\n/);
+
+    for (const paragraph of paragraphs) {
+        if ((currentChunk + paragraph).length < maxLength) {
+            currentChunk += (currentChunk ? "\n\n" : "") + paragraph;
+        } else {
+            // If current chunk is not empty, push it
+            if (currentChunk) {
+                chunks.push(currentChunk);
+                currentChunk = "";
+            }
+
+            // If paragraph itself is too long, split by sentences
+            if (paragraph.length > maxLength) {
+                // Simple sentence split (can be improved)
+                const sentences = paragraph.match(/[^.!?]+[.!?]+(\s+|$)/g) || [paragraph];
+                for (const sentence of sentences) {
+                    if ((currentChunk + sentence).length < maxLength) {
+                        currentChunk += sentence;
+                    } else {
+                        if (currentChunk) {
+                            chunks.push(currentChunk)
+                            currentChunk = "";
+                        }
+                        // If sentence is seemingly too long still, just push it (or force split)
+                        // For now, we assume sentences aren't 2000+ chars normally.
+                        // If they are, we might force split by length or just let it pass
+                        // effectively "overflowing" slightly or we recurse.
+                        // Let's just push for safety to avoid infinite loops or errors if single word is huge.
+                        if (sentence.length > maxLength) {
+                            // Hard split if absolutely needed
+                            let remaining = sentence;
+                            while (remaining.length > maxLength) {
+                                chunks.push(remaining.substring(0, maxLength));
+                                remaining = remaining.substring(maxLength);
+                            }
+                            currentChunk += remaining;
+                        } else {
+                            currentChunk += sentence;
+                        }
+                    }
+                }
+            } else {
+                currentChunk = paragraph;
+            }
+        }
+    }
+    if (currentChunk) chunks.push(currentChunk);
+    return chunks;
+};
+
 // Listen for messages from the main thread
 self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
     console.log("Worker: Received message:", JSON.stringify(event.data));
@@ -194,84 +251,94 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
                 tgt: tgt.label, tgtGemma: tgt.gemmaCode, tgtNllb: tgt.nllbCode
             });
 
-            self.postMessage({ status: 'translating', output: '' } as WorkerResponse);
 
-            if (TranslationPipeline.activeModel.includes('NLLB')) {
-                const output = await generator(text, {
-                    src_lang: src.nllbCode,
-                    tgt_lang: tgt.nllbCode,
-                });
-                console.log("Worker: NLLB Output:", output);
+
+            const MAX_CHUNK_LENGTH = 1000; // Conservative limit for context
+            const chunks = splitTextIntoChunks(text, MAX_CHUNK_LENGTH);
+            const totalChunks = chunks.length;
+
+            console.log(`Worker: Split text into ${totalChunks} chunks.`);
+
+            let fullTranslation = "";
+
+            for (let i = 0; i < totalChunks; i++) {
+                const chunk = chunks[i];
+                console.log(`Worker: Translating chunk ${i + 1}/${totalChunks} (Length: ${chunk.length})`);
+
+                // Notify progress (optional, but good for UX if supported by frontend)
                 self.postMessage({
-                    status: 'done',
-                    output: output[0].translation_text,
+                    status: 'translating',
+                    output: fullTranslation + (fullTranslation ? "\n\n" : "") + `[Translating chunk ${i + 1}/${totalChunks}...]`
                 } as WorkerResponse);
-            } else {
-                const src_code = src.gemmaCode;
-                const tgt_code = tgt.gemmaCode;
 
-                // Prepare prompt
-                let prompt = "";
-                try {
-                    prompt = generator.tokenizer.apply_chat_template([
-                        {
-                            role: "user",
-                            content: [
-                                {
-                                    type: "text",
-                                    source_lang_code: src_code,
-                                    target_lang_code: tgt_code,
-                                    text: text
-                                }
-                            ]
+                let chunkTranslation = "";
+
+                if (TranslationPipeline.activeModel.includes('NLLB')) {
+                    const output = await generator(chunk, {
+                        src_lang: src.nllbCode,
+                        tgt_lang: tgt.nllbCode,
+                    });
+                    chunkTranslation = output[0].translation_text;
+                } else {
+                    const src_code = src.gemmaCode;
+                    const tgt_code = tgt.gemmaCode;
+
+                    // Prepare prompt
+                    let prompt = "";
+                    try {
+                        prompt = generator.tokenizer.apply_chat_template([
+                            {
+                                role: "user",
+                                content: [
+                                    {
+                                        type: "text",
+                                        source_lang_code: src_code,
+                                        target_lang_code: tgt_code,
+                                        text: chunk
+                                    }
+                                ]
+                            }
+                        ], { tokenize: false, add_generation_prompt: true });
+                    } catch (e) {
+                        console.warn("Worker: apply_chat_template failed, using manual fallback prompt.");
+                        prompt = `<start_of_turn>user\nYou are a professional ${src.label} (${src_code}) to ${tgt.label} (${tgt_code}) translator. Translate the following text into ${tgt.label}:\n\n${chunk}<end_of_turn>\n<start_of_turn>model\n`;
+                    }
+
+                    const output = await generator(prompt, {
+                        max_new_tokens: 512,
+                        temperature: 0.1,
+                        do_sample: false,
+                        return_full_text: false,
+                        callback_function: (x: any) => {
+                            // We don't stream individual chunk progress to main thread efficiently here 
+                            // because we are in a loop.
+                            // Maybe we could, but let's keep it simple: wait for chunk to finish.
                         }
-                    ], { tokenize: false, add_generation_prompt: true });
-                } catch (e) {
-                    console.warn("Worker: apply_chat_template failed, using manual fallback prompt.");
-                    prompt = `<start_of_turn>user\nYou are a professional ${src.label} (${src_code}) to ${tgt.label} (${tgt_code}) translator. Translate the following text into ${tgt.label}:\n\n${text}<end_of_turn>\n<start_of_turn>model\n`;
+                    } as any);
+
+                    const cleanFinal = (t: string) => {
+                        let res = t;
+                        if (res.startsWith(prompt)) res = res.substring(prompt.length);
+                        // Aggressive cleaning for gemma which tends to chat
+                        res = res.replace(/^(.*?可|.*?(is|as|translated to|translation):)\s*/i, '');
+                        res = res.replace(new RegExp(`^.*?${chunk.substring(0, 20)}.*?as:\\s*`, 'i'), '');
+                        res = res.replace(/^(Target|Translation)\s*\(.*?\):\s*/i, '');
+                        const stopIdx = res.indexOf('***');
+                        if (stopIdx !== -1) res = res.substring(0, stopIdx);
+                        return res.trim();
+                    };
+
+                    chunkTranslation = cleanFinal((output as any)[0].generated_text);
                 }
 
-                console.log("Worker: Final Prompt:", prompt);
+                fullTranslation += (fullTranslation ? "\n\n" : "") + chunkTranslation;
 
-                const output = await generator(prompt, {
-                    max_new_tokens: 512,
-                    temperature: 0.1,
-                    do_sample: false,
-                    return_full_text: false,
-                    callback_function: (x: any) => {
-                        let text = x[0].generated_text;
-                        if (text.startsWith(prompt)) text = text.substring(prompt.length);
-
-                        // Clean intro chatter
-                        const cleanOutput = (t: string) => {
-                            let res = t;
-                            res = res.replace(/^(.*?可|.*?(is|as|translated to|translation):)\s*/i, '');
-                            res = res.replace(new RegExp(`^.*?${text}.*?as:\\s*`, 'i'), '');
-                            res = res.replace(/^(Target|Translation)\s*\(.*?\):\s*/i, '');
-                            const stopIdx = res.indexOf('***');
-                            if (stopIdx !== -1) res = res.substring(0, stopIdx);
-                            return res.trim();
-                        };
-
-                        self.postMessage({ status: 'translating', output: cleanOutput(text) } as WorkerResponse);
-                    }
-                } as any);
-
-                const cleanFinal = (t: string) => {
-                    let res = t;
-                    if (res.startsWith(prompt)) res = res.substring(prompt.length);
-                    res = res.replace(/^(.*?可|.*?(is|as|translated to|translation):)\s*/i, '');
-                    res = res.replace(new RegExp(`^.*?${text}.*?as:\\s*`, 'i'), '');
-                    res = res.replace(/^(Target|Translation)\s*\(.*?\):\s*/i, '');
-                    const stopIdx = res.indexOf('***');
-                    if (stopIdx !== -1) res = res.substring(0, stopIdx);
-                    return res.trim();
-                };
-
-                const finalCleaned = cleanFinal((output as any)[0].generated_text);
-                console.log("Worker: Final Cleaned:", finalCleaned);
-                self.postMessage({ status: 'done', output: finalCleaned } as WorkerResponse);
+                // Send intermediate result so user sees something happening
+                self.postMessage({ status: 'translating', output: fullTranslation } as WorkerResponse);
             }
+
+            console.log("Worker: All chunks translated.");
+            self.postMessage({ status: 'done', output: fullTranslation } as WorkerResponse);
         }
     } catch (err: unknown) {
         console.error("Worker Error:", err);
