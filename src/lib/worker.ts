@@ -62,7 +62,7 @@ export const SUPPORTED_LANGUAGES = [
 
 // Check if we are running in a production-like environment for local model loading
 env.allowLocalModels = true;
-env.allowRemoteModels = true;
+env.allowRemoteModels = false;
 env.useBrowserCache = true;
 env.localModelPath = '/models/';
 
