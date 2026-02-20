@@ -89,7 +89,6 @@ export interface WorkerResponse {
 class TranslationPipeline {
     static task = 'text-generation';
     static primaryModel = 'translategemma';
-    static fallbackModel = 'Xenova/nllb-200-distilled-600M';
 
     static instance: any = null;
     static activeDevice: 'webgpu' | 'cpu' = 'webgpu';
@@ -132,22 +131,7 @@ class TranslationPipeline {
             this.activeModel = 'TranslateGemma 4B';
             return this.instance;
         } catch (err) {
-            console.warn("Worker: CPU + TranslateGemma 4B failed. Fallback to NLLB...", err);
-        }
-
-        try {
-            console.log("Worker: Attempt 3: NLLB-200");
-            const p = await pipeline('translation' as PipelineType, this.fallbackModel, {
-                device: (navigator as any).gpu ? 'webgpu' : 'wasm',
-                progress_callback: progress_callback as any,
-            } as any);
-
-            this.instance = p;
-            this.activeDevice = (navigator as any).gpu ? 'webgpu' : 'cpu';
-            this.activeModel = 'NLLB-200 (Stable Mode)';
-            return this.instance;
-        } catch (err) {
-            console.error("Worker: All failed.", err);
+            console.error("Worker: CPU + TranslateGemma 4B failed. All attempts failed.", err);
             throw err;
         }
     }
@@ -299,63 +283,55 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 
                 let chunkTranslation = "";
 
-                if (TranslationPipeline.activeModel.includes('NLLB')) {
-                    const output = await generator(chunk, {
-                        src_lang: src.nllbCode,
-                        tgt_lang: tgt.nllbCode,
-                    });
-                    chunkTranslation = output[0].translation_text;
-                } else {
-                    const src_code = src.gemmaCode;
-                    const tgt_code = tgt.gemmaCode;
+                const src_code = src.gemmaCode;
+                const tgt_code = tgt.gemmaCode;
 
-                    // Prepare prompt
-                    let prompt = "";
-                    try {
-                        prompt = generator.tokenizer.apply_chat_template([
-                            {
-                                role: "user",
-                                content: [
-                                    {
-                                        type: "text",
-                                        source_lang_code: src_code,
-                                        target_lang_code: tgt_code,
-                                        text: chunk
-                                    }
-                                ]
-                            }
-                        ], { tokenize: false, add_generation_prompt: true });
-                    } catch (e) {
-                        console.warn("Worker: apply_chat_template failed, using manual fallback prompt.");
-                        prompt = `<start_of_turn>user\nYou are a professional ${src.label} (${src_code}) to ${tgt.label} (${tgt_code}) translator. Translate the following text into ${tgt.label}:\n\n${chunk}<end_of_turn>\n<start_of_turn>model\n`;
-                    }
-
-                    const output = await generator(prompt, {
-                        max_new_tokens: 512,
-                        temperature: 0.1,
-                        do_sample: false,
-                        return_full_text: false,
-                        callback_function: (x: any) => {
-                            if (currentAbortController?.signal.aborted) {
-                                throw new Error("AbortError");
-                            }
+                // Prepare prompt
+                let prompt = "";
+                try {
+                    prompt = generator.tokenizer.apply_chat_template([
+                        {
+                            role: "user",
+                            content: [
+                                {
+                                    type: "text",
+                                    source_lang_code: src_code,
+                                    target_lang_code: tgt_code,
+                                    text: chunk
+                                }
+                            ]
                         }
-                    } as any);
-
-                    const cleanFinal = (t: string) => {
-                        let res = t;
-                        if (res.startsWith(prompt)) res = res.substring(prompt.length);
-                        // Aggressive cleaning for gemma which tends to chat
-                        res = res.replace(/^(.*?可|.*?(is|as|translated to|translation):)\s*/i, '');
-                        res = res.replace(new RegExp(`^.*?${chunk.substring(0, 20)}.*?as:\\s*`, 'i'), '');
-                        res = res.replace(/^(Target|Translation)\s*\(.*?\):\s*/i, '');
-                        const stopIdx = res.indexOf('***');
-                        if (stopIdx !== -1) res = res.substring(0, stopIdx);
-                        return res.trim();
-                    };
-
-                    chunkTranslation = cleanFinal((output as any)[0].generated_text);
+                    ], { tokenize: false, add_generation_prompt: true });
+                } catch (e) {
+                    console.warn("Worker: apply_chat_template failed, using manual fallback prompt.");
+                    prompt = `<start_of_turn>user\nYou are a professional ${src.label} (${src_code}) to ${tgt.label} (${tgt_code}) translator. Translate the following text into ${tgt.label}:\n\n${chunk}<end_of_turn>\n<start_of_turn>model\n`;
                 }
+
+                const output = await generator(prompt, {
+                    max_new_tokens: 512,
+                    temperature: 0.1,
+                    do_sample: false,
+                    return_full_text: false,
+                    callback_function: (x: any) => {
+                        if (currentAbortController?.signal.aborted) {
+                            throw new Error("AbortError");
+                        }
+                    }
+                } as any);
+
+                const cleanFinal = (t: string) => {
+                    let res = t;
+                    if (res.startsWith(prompt)) res = res.substring(prompt.length);
+                    // Aggressive cleaning for gemma which tends to chat
+                    res = res.replace(/^(.*?可|.*?(is|as|translated to|translation):)\s*/i, '');
+                    res = res.replace(new RegExp(`^.*?${chunk.substring(0, 20)}.*?as:\\s*`, 'i'), '');
+                    res = res.replace(/^(Target|Translation)\s*\(.*?\):\s*/i, '');
+                    const stopIdx = res.indexOf('***');
+                    if (stopIdx !== -1) res = res.substring(0, stopIdx);
+                    return res.trim();
+                };
+
+                chunkTranslation = cleanFinal((output as any)[0].generated_text);
 
                 fullTranslation += (fullTranslation ? "\n\n" : "") + chunkTranslation;
                 lastOutput = fullTranslation;
