@@ -1,5 +1,17 @@
 # Release Notes / リリースノート
 
+## [1.0.1] - Remote Model Fetching & Documentation Cleanup / リモートモデルフェッチとドキュメント整理
+
+### ✨ Enhancements / 改善点
+- **Direct Model Fetching / モデルの直接取得**:
+  - Transitioned from local model hosting to direct remote fetching from Hugging Face, resolving the 25MB file size limit and eliminating the need for manual model placement.
+  - ローカルモデル配置からHugging Faceからの直接取得へ移行し、Cloudflareのファイルサイズ制限問題を解決するとともに、手動でのモデル配置を不要にしました。
+
+### 📚 Documentation / ドキュメント
+- **Setup Instructions / セットアップ手順**:
+  - Removed the `public/models` directory requirement and updated documentation to explain the automatic model caching mechanism.
+  - ローカルでの自動キャッシュ機能への変更に伴い、`public/models`に関する配置要件の手順を削除・整理しました。
+
 ## [1.0.0] - Initial Release & Core Features / 初回リリースと主要機能
 
 ### ✨ New Features / 新機能

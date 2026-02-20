@@ -60,11 +60,10 @@ export const SUPPORTED_LANGUAGES = [
     { label: "Persian", gemmaCode: "fa", nllbCode: "fas_Arab" }
 ];
 
-// Check if we are running in a production-like environment for local model loading
-env.allowLocalModels = true;
-env.allowRemoteModels = false;
+// Configure Transformers.js to fetch models directly from Hugging Face
+env.allowLocalModels = false;
+env.allowRemoteModels = true;
 env.useBrowserCache = true;
-env.localModelPath = '/models/';
 
 // Define message types
 export interface WorkerMessage {

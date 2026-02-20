@@ -16,11 +16,8 @@ npm install
 ```
 
 ### 3. Model Setup
-Because this application runs completely on the client side, the model files required for execution must be served from the local server (`public/models`) to the client.
-Please follow these steps to place the models:
-
-1. Save the model files directly under the `public/models` directory.
-2. For details on the directory structure, please refer to `public/models/README.en.md`.
+This application runs entirely on the client side and **automatically downloads and caches the necessary model files directly from Hugging Face into the browser upon first execution**.
+You can deploy it as-is without worrying about Cloudflare Pages' 25MB limit or model redistribution license requirements.
 
 ### 4. Starting the Development Server (Recommended)
 To start the server in development mode, run the following command:
