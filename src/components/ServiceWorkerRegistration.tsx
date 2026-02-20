@@ -5,27 +5,28 @@ import { useEffect } from 'react';
 export function ServiceWorkerRegistration() {
     useEffect(() => {
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-            console.log('[Registration] Initializing immediate registration...');
-
-            navigator.serviceWorker.register('/sw.js', { scope: '/' })
-                .then((registration) => {
-                    console.log('[Registration] Success! Scope:', registration.scope);
-
-                    // Force the new Service Worker to take over
-                    if (registration.waiting) {
-                        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                    }
-                })
-                .catch((error) => {
-                    console.error('[Registration] Failed:', error);
-                });
-
-            // Listen for controller changes
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                console.log('[Registration] Service Worker is now controlling the page');
+            // 1. Unregister any existing service workers
+            navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                for (let registration of registrations) {
+                    registration.unregister();
+                    console.log('[Registration] Unregistered obsolete Service Worker');
+                }
             });
+
+            // 2. Clear old model caches to free up disk space
+            if (window.caches) {
+                caches.keys().then((cacheNames) => {
+                    cacheNames.forEach((cacheName) => {
+                        if (cacheName.includes('model-chunks')) {
+                            caches.delete(cacheName);
+                            console.log(`[Cache] Deleted old cache: ${cacheName}`);
+                        }
+                    });
+                });
+            }
         }
     }, []);
 
     return null;
 }
+
