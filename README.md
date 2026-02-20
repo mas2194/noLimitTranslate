@@ -1,5 +1,7 @@
 # noLimitTranslate
 
+**Live Demo**: [https://nolimittranslate.pages.dev](https://nolimittranslate.pages.dev)
+
 WebGPU と Transformers.js を活用した、完全クライアントサイド実行型の無制限翻訳アプリケーションです。
 
 ## 🚀 サーバーの立ち上げ方

@@ -1,5 +1,7 @@
 # noLimitTranslate
 
+**Live Demo**: [https://nolimittranslate.pages.dev](https://nolimittranslate.pages.dev)
+
 An entirely client-side execution unlimited translation application leveraging WebGPU and Transformers.js.
 
 ## 🚀 How to Start the Server
