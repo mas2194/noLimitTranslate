@@ -6,7 +6,7 @@ import { Header } from "@/components/translation/Header";
 import { StatusBanner } from "@/components/translation/StatusBanner";
 import { TranslationInput } from "@/components/translation/TranslationInput";
 import { TranslationOutput } from "@/components/translation/TranslationOutput";
-import { ArrowRightLeft } from "lucide-react";
+import { ArrowRightLeft, Github } from "lucide-react";
 
 export default function Home() {
   const { translate, loadModel, stop } = useWorker();
@@ -21,6 +21,17 @@ export default function Home() {
 
   return (
     <main className="min-h-screen relative flex flex-col items-center justify-center overflow-hidden font-sans selection:bg-blue-500/30">
+
+      {/* GitHub Link */}
+      <a
+        href="https://github.com/mas2194/noLimitTranslate"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed top-4 right-4 md:top-6 md:right-6 z-50 p-2 text-slate-400 hover:text-slate-600 transition-colors bg-white/50 hover:bg-white rounded-full backdrop-blur-sm border border-transparent hover:border-slate-200 shadow-sm hover:shadow-md"
+        title="View on GitHub"
+      >
+        <Github className="w-5 h-5 md:w-6 md:h-6" />
+      </a>
 
       {/* Aurora Background */}
       <div className="fixed inset-0 bg-slate-50 pointer-events-none" />
