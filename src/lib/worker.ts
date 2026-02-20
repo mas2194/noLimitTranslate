@@ -87,7 +87,7 @@ export interface WorkerResponse {
 // Singleton for the pipeline
 class TranslationPipeline {
     static task = 'text-generation';
-    static primaryModel = 'translategemma';
+    static primaryModel = 'onnx-community/translategemma-text-4b-it-ONNX';
 
     static instance: any = null;
     static activeDevice: 'webgpu' | 'cpu' = 'webgpu';
