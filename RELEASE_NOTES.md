@@ -14,7 +14,7 @@
   - レスポンシブでモダンなインターフェースを導入し、特にモデルダウンロード画面がスマートフォンの小さな画面で見切れないように最適化しました。
 - **Instant Interaction / 即時インタラクション**:
   - Enhanced user experience with instant UI feedback, including an immediate "[Stopped]" status display upon cancellation and optimistic UI updates for real-time progress.
-  - 翻訳のキャンセル時に即座に「[停止済]」と表示されるようにするなど、リアルタイムな進行状況を描画し、直感的なUIフィードバックを強化しました。
+  - 翻訳のキャンセル時に即座に「[Stopped]」と表示されるようにするなど、リアルタイムな進行状況を描画し、直感的なUIフィードバックを強化しました。
 
 ### 🐛 Bug Fixes / バグ修正
 - **Translation Mapping / 翻訳の言語マッピング**:
