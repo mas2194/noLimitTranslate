@@ -66,8 +66,12 @@ export default function Home() {
           <TranslationOutput isTranslating={isTranslating} />
         </div>
 
-        <p className="text-center text-slate-400 text-xs mt-[var(--spacing-gr-4)] font-medium tracking-[0.1em] uppercase">
-          Privacy-First AI Translation • Powered by WebGPU
+        <p className="text-center inline-flex flex-wrap justify-center gap-x-2 gap-y-1 text-slate-400 text-xs mt-[var(--spacing-gr-4)] font-medium tracking-[0.1em] uppercase">
+          <span>100% Free</span>
+          <span>&bull;</span>
+          <span>(Almost) Fully Local</span>
+          <span>&bull;</span>
+          <span>Privacy-First AI Translation</span>
         </p>
       </div>
     </main>

@@ -4,6 +4,12 @@
 
 An entirely client-side execution unlimited translation application leveraging WebGPU and Transformers.js.
 
+## 🌟 Features
+
+- **100% Free**: It does not use external translation APIs (like DeepL or Google Translate), requiring no API keys or subscription fees. You can translate text boundlessly.
+- **(Almost) Fully Local**: After the initial download of the models from Hugging Face on the first visit, all translation processes are completed entirely within your browser (on your device). No translation data is ever sent to external servers, providing excellent privacy protection.
+- **Fast AI-Powered Translation**: By leveraging WebGPU, it achieves high-speed and highly accurate inferences even natively on the client side.
+
 ## 🚀 How to Start the Server
 
 ### 1. Prerequisites
