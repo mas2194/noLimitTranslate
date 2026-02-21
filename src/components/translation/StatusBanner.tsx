@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, Download, Power, AlertTriangle, X } from "lucide-react";
+import { AlertCircle, Download, Power, AlertTriangle, X, Sparkles, Cpu } from "lucide-react";
 import { useTranslationStore } from "@/lib/store";
 
 interface StatusBannerProps {
-    onInitialize?: () => void;
+    onInitialize?: (modelId: 'gemma' | 'nllb') => void;
 }
 
 export function StatusBanner({ onInitialize }: StatusBannerProps) {
@@ -16,30 +16,33 @@ export function StatusBanner({ onInitialize }: StatusBannerProps) {
     const isLoading = status === 'loading';
     const isIdle = status === 'idle';
 
-    const handleInitializeClick = () => {
+    const handleInitializeClick = (modelId: 'gemma' | 'nllb') => {
         const reasons: string[] = [];
 
-        if (!(navigator as any).gpu) {
-            reasons.push("WebGPU is not supported by your browser. Translation will run on the CPU and will be extremely slow.");
-        }
-
-        if ('deviceMemory' in navigator) {
-            const ram = (navigator as any).deviceMemory;
-            if (typeof ram === 'number' && ram < 4) {
-                reasons.push(`Your device reports having ${ram}GB of RAM. At least 4GB is recommended to run this model safely.`);
+        // Only show WebGPU warnings if they selected Gemma
+        if (modelId === 'gemma') {
+            if (!(navigator as any).gpu) {
+                reasons.push("WebGPU is not supported by your browser. The model will run on the CPU and will be extremely slow. Consider using NLLB-200 instead.");
             }
-        }
 
-        const isMobile = window.matchMedia("(max-width: 768px)").matches || /Mobi|Android/i.test(navigator.userAgent);
-        if (isMobile) {
-            reasons.push("Mobile devices typically lack the memory to run large AI models efficiently. The browser may freeze or close.");
+            if ('deviceMemory' in navigator) {
+                const ram = (navigator as any).deviceMemory;
+                if (typeof ram === 'number' && ram < 4) {
+                    reasons.push(`Your device reports having ${ram}GB of RAM. At least 4GB is recommended to run Gemma safely.`);
+                }
+            }
+
+            const isMobile = window.matchMedia("(max-width: 768px)").matches || /Mobi|Android/i.test(navigator.userAgent);
+            if (isMobile) {
+                reasons.push("Mobile devices typically lack the memory to run large AI models efficiently. The browser may freeze or close.");
+            }
         }
 
         if (reasons.length > 0) {
             setWarningReasons(reasons);
             setShowWarning(true);
         } else {
-            onInitialize?.();
+            onInitialize?.(modelId);
         }
     };
 
@@ -98,7 +101,9 @@ export function StatusBanner({ onInitialize }: StatusBannerProps) {
                                     <button
                                         onClick={() => {
                                             setShowWarning(false);
-                                            onInitialize?.();
+                                            // The warning modal is currently decoupled from the specific click,
+                                            // but since warning only fires for gemma, we can pass 'gemma'
+                                            onInitialize?.('gemma');
                                         }}
                                         className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-200 transition-colors border border-amber-500"
                                     >
@@ -133,26 +138,64 @@ export function StatusBanner({ onInitialize }: StatusBannerProps) {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="card-panel p-[var(--spacing-gr-3)] rounded-[var(--spacing-gr-2)] flex flex-col md:flex-row items-center justify-between gap-6 bg-white border-2 border-dashed border-blue-100/50"
+                        className="card-panel p-[var(--spacing-gr-3)] rounded-[var(--spacing-gr-2)] flex flex-col gap-6 bg-white border-2 border-dashed border-blue-100/50"
                     >
                         <div className="flex items-center gap-4 text-center md:text-left">
                             <div className="p-3 bg-blue-50 rounded-full shrink-0">
                                 <Power className="w-6 h-6 text-blue-500" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-slate-800 tracking-wide text-lg">AI Engine Standby</h3>
+                                <h3 className="font-bold text-slate-800 tracking-wide text-lg">Select AI Engine</h3>
                                 <p className="text-sm text-slate-500">
-                                    Click to initialize Gzipped Gemma 4B on WebGPU (one-time ~2.5GB download).
+                                    Choose an engine to run in your browser. All translations happen locally.
                                 </p>
                             </div>
                         </div>
-                        <button
-                            onClick={handleInitializeClick}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg shadow-blue-200 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 whitespace-nowrap"
-                        >
-                            <Download className="w-5 h-5" />
-                            Initialize AI Engine
-                        </button>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Option 1: TranslateGemma 4B */}
+                            <button
+                                onClick={() => handleInitializeClick('gemma')}
+                                className="group flex items-start gap-4 p-4 border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all text-left bg-gradient-to-br from-white to-slate-50 relative overflow-hidden"
+                            >
+                                <div className="absolute inset-0 bg-blue-50/0 group-hover:bg-blue-50/50 transition-colors pointer-events-none" />
+                                <div className="p-2 shrink-0 bg-blue-100/50 text-blue-600 rounded-lg group-hover:scale-110 transition-transform">
+                                    <Sparkles className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                                        TranslateGemma
+                                        <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">Recommended</span>
+                                    </h4>
+                                    <p className="text-xs text-slate-500 mt-1 mb-2">Google's high-quality 4B parameter model. Highly accurate contextual translations.</p>
+                                    <div className="flex flex-wrap gap-2 text-[10px] font-medium">
+                                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">GPU Required</span>
+                                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">~2.5GB Download</span>
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* Option 2: NLLB-200 */}
+                            <button
+                                onClick={() => handleInitializeClick('nllb')}
+                                className="group flex items-start gap-4 p-4 border border-slate-200 rounded-xl hover:border-emerald-400 hover:shadow-md transition-all text-left bg-gradient-to-br from-white to-slate-50 relative overflow-hidden"
+                            >
+                                <div className="absolute inset-0 bg-emerald-50/0 group-hover:bg-emerald-50/50 transition-colors pointer-events-none" />
+                                <div className="p-2 shrink-0 bg-emerald-100/50 text-emerald-600 rounded-lg group-hover:scale-110 transition-transform">
+                                    <Cpu className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-800">
+                                        NLLB-200
+                                    </h4>
+                                    <p className="text-xs text-slate-500 mt-1 mb-2">Meta's lightweight distilled model. Fast initialization and wide language support.</p>
+                                    <div className="flex flex-wrap gap-2 text-[10px] font-medium">
+                                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">CPU Only</span>
+                                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">~600MB Download</span>
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

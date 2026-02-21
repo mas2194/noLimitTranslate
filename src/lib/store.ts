@@ -1,10 +1,10 @@
-
 import { create } from 'zustand';
 
 interface TranslationState {
     status: 'idle' | 'loading' | 'ready' | 'translating' | 'done' | 'stopped' | 'error';
     device: 'webgpu' | 'cpu' | null;
     model: string | null; // Track active model name
+    selectedModel: 'gemma' | 'nllb'; // Track user's choice before loading
     progress: number;
     output: string;
     sourceLang: string;
@@ -20,6 +20,7 @@ interface TranslationState {
     setStatus: (status: TranslationState['status']) => void;
     setDevice: (device: TranslationState['device']) => void;
     setModel: (model: string) => void;
+    setSelectedModel: (modelId: 'gemma' | 'nllb') => void;
     setProgress: (progress: number) => void;
     setOutput: (output: string) => void;
     setInput: (input: string) => void;
@@ -33,6 +34,7 @@ export const useTranslationStore = create<TranslationState>((set) => ({
     status: 'idle',
     device: null,
     model: null,
+    selectedModel: 'gemma',
     progress: 0,
     output: '',
     sourceLang: 'English',
@@ -43,6 +45,7 @@ export const useTranslationStore = create<TranslationState>((set) => ({
     setStatus: (status) => set({ status }),
     setDevice: (device) => set({ device }),
     setModel: (model) => set({ model }),
+    setSelectedModel: (selectedModel) => set({ selectedModel }),
     setProgress: (progress) => set({ progress }),
     setOutput: (output) => set({ output }),
     setInput: (input) => set({ input }),

@@ -43,7 +43,7 @@ export default function Home() {
 
         <Header />
 
-        <StatusBanner onInitialize={loadModel} />
+        <StatusBanner onInitialize={(modelId) => loadModel(modelId)} />
 
         <div className="flex flex-col md:grid md:grid-cols-2 gap-[var(--spacing-gr-3)] relative">
           <TranslationInput

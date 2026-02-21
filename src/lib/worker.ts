@@ -65,6 +65,12 @@ env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
+// Set WASM paths to CDN to avoid Cloudflare 25MB limit and bundling issues
+if (env.backends?.onnx?.wasm) {
+    const version = (env.backends.onnx as any).versions?.web || '1.20.1';
+    env.backends.onnx.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${version}/dist/`;
+}
+
 // Define message types
 export interface WorkerMessage {
     type: 'load' | 'translate' | 'abort';
@@ -72,6 +78,7 @@ export interface WorkerMessage {
         text?: string;
         src_lang?: string;
         tgt_lang?: string;
+        modelId?: 'gemma' | 'nllb';
     };
 }
 
@@ -86,52 +93,70 @@ export interface WorkerResponse {
 
 // Singleton for the pipeline
 class TranslationPipeline {
-    static task = 'text-generation';
+    static primaryTask = 'text-generation';
     static primaryModel = 'onnx-community/translategemma-text-4b-it-ONNX';
+
+    // CPU Fallback: TranslateGemma 4B is too large for WASM memory (~2-4GB limit), so we use NLLB
+    static fallbackTask = 'translation';
+    static fallbackModel = 'Xenova/nllb-200-distilled-600M';
 
     static instance: any = null;
     static activeDevice: 'webgpu' | 'cpu' = 'webgpu';
     static activeModel: string = 'TranslateGemma 4B';
 
-    static async getInstance(progress_callback?: (data: { status: string; progress: number, name: string, file: string }) => void) {
+    static async getInstance(modelId: 'gemma' | 'nllb', progress_callback?: (data: { status: string; progress: number, name: string, file: string }) => void) {
         if (this.instance) return this.instance;
 
-        try {
-            console.log("Worker: Attempt 1: WebGPU + TranslateGemma 4B");
-            if (!(navigator as any).gpu) throw new Error("WebGPU not supported");
+        if (modelId === 'gemma') {
+            try {
+                console.log("Worker: Loading TranslateGemma 4B via WebGPU");
+                if (!(navigator as any).gpu) throw new Error("WebGPU not supported");
 
-            const p = await pipeline(this.task as PipelineType, this.primaryModel, {
-                device: 'webgpu',
-                dtype: 'q4',
-                progress_callback: progress_callback as any,
-                session_options: {
-                    graphOptimizationLevel: 'basic',
+                const p = await pipeline(this.primaryTask as PipelineType, this.primaryModel, {
+                    device: 'webgpu',
+                    dtype: 'q4',
+                    progress_callback: progress_callback as any,
+                    session_options: {
+                        graphOptimizationLevel: 'basic',
+                    }
+                } as any);
+
+                this.instance = p;
+                this.activeDevice = 'webgpu';
+                this.activeModel = 'TranslateGemma 4B';
+                return this.instance;
+            } catch (err) {
+                console.warn("Worker: WebGPU + TranslateGemma 4B failed.", err);
+                throw err;
+            }
+        } else {
+            // Force CPU and NLLB
+            try {
+                console.log("Worker: Loading NLLB-200 via CPU (WASM)");
+
+                // Limit WASM threads to prevent OOM
+                if (env.backends?.onnx?.wasm) {
+                    env.backends.onnx.wasm.numThreads = 1;
                 }
-            } as any);
 
-            this.instance = p;
-            this.activeDevice = 'webgpu';
-            this.activeModel = 'TranslateGemma 4B';
-            return this.instance;
-        } catch (err) {
-            console.warn("Worker: WebGPU + TranslateGemma 4B failed.", err);
-        }
+                const p = await pipeline(this.fallbackTask as PipelineType, this.fallbackModel, {
+                    device: 'wasm',
+                    dtype: 'q8', // Enforce q8 specifically since Xenova provides it
+                    progress_callback: progress_callback as any,
+                    session_options: {
+                        intra_op_num_threads: 1,
+                        inter_op_num_threads: 1,
+                    }
+                } as any);
 
-        try {
-            console.log("Worker: Attempt 2: CPU + TranslateGemma 4B");
-            const p = await pipeline(this.task as PipelineType, this.primaryModel, {
-                device: 'wasm',
-                dtype: 'q4',
-                progress_callback: progress_callback as any,
-            } as any);
-
-            this.instance = p;
-            this.activeDevice = 'cpu';
-            this.activeModel = 'TranslateGemma 4B';
-            return this.instance;
-        } catch (err) {
-            console.error("Worker: CPU + TranslateGemma 4B failed. All attempts failed.", err);
-            throw err;
+                this.instance = p;
+                this.activeDevice = 'cpu';
+                this.activeModel = 'NLLB-200 (600M)';
+                return this.instance;
+            } catch (err) {
+                console.error("Worker: CPU + NLLB failed.", err);
+                throw err;
+            }
         }
     }
 }
@@ -206,7 +231,8 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 
     try {
         if (type === 'load') {
-            await TranslationPipeline.getInstance((x: any) => {
+            const requestedModel = data?.modelId || 'gemma';
+            await TranslationPipeline.getInstance(requestedModel, (x: any) => {
                 if (x.status === 'progress' || x.status === 'initiate' || x.status === 'done') {
                     self.postMessage({
                         status: 'loading',
@@ -237,7 +263,8 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
             currentAbortController = new AbortController();
             const signal = currentAbortController.signal;
 
-            const generator = await TranslationPipeline.getInstance();
+            // Model should already be loaded, but pass 'gemma' just in case it wasn't
+            const generator = await TranslationPipeline.getInstance('gemma');
             const text = data?.text || '';
             const src_lang = data?.src_lang || 'English';
             const tgt_lang = data?.tgt_lang || 'Japanese';
@@ -282,55 +309,74 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 
                 let chunkTranslation = "";
 
-                const src_code = src.gemmaCode;
-                const tgt_code = tgt.gemmaCode;
-
-                // Prepare prompt
+                // Prepare prompt and arguments
                 let prompt = "";
-                try {
-                    prompt = generator.tokenizer.apply_chat_template([
-                        {
-                            role: "user",
-                            content: [
-                                {
-                                    type: "text",
-                                    source_lang_code: src_code,
-                                    target_lang_code: tgt_code,
-                                    text: chunk
-                                }
-                            ]
-                        }
-                    ], { tokenize: false, add_generation_prompt: true });
-                } catch (e) {
-                    console.warn("Worker: apply_chat_template failed, using manual fallback prompt.");
-                    prompt = `<start_of_turn>user\nYou are a professional ${src.label} (${src_code}) to ${tgt.label} (${tgt_code}) translator. Translate the following text into ${tgt.label}:\n\n${chunk}<end_of_turn>\n<start_of_turn>model\n`;
-                }
+                let output;
 
-                const output = await generator(prompt, {
-                    max_new_tokens: 512,
-                    temperature: 0.1,
-                    do_sample: false,
-                    return_full_text: false,
-                    callback_function: (x: any) => {
-                        if (currentAbortController?.signal.aborted) {
-                            throw new Error("AbortError");
-                        }
+                if (TranslationPipeline.activeModel.includes('TranslateGemma')) {
+                    const src_code = src.gemmaCode;
+                    const tgt_code = tgt.gemmaCode;
+                    try {
+                        prompt = generator.tokenizer.apply_chat_template([
+                            {
+                                role: "user",
+                                content: [
+                                    {
+                                        type: "text",
+                                        source_lang_code: src_code,
+                                        target_lang_code: tgt_code,
+                                        text: chunk
+                                    }
+                                ]
+                            }
+                        ], { tokenize: false, add_generation_prompt: true });
+                    } catch (e) {
+                        console.warn("Worker: apply_chat_template failed, using manual fallback prompt.");
+                        prompt = `<start_of_turn>user\nYou are a professional ${src.label} (${src_code}) to ${tgt.label} (${tgt_code}) translator. Translate the following text into ${tgt.label}:\n\n${chunk}<end_of_turn>\n<start_of_turn>model\n`;
                     }
-                } as any);
 
-                const cleanFinal = (t: string) => {
-                    let res = t;
-                    if (res.startsWith(prompt)) res = res.substring(prompt.length);
-                    // Aggressive cleaning for gemma which tends to chat
-                    res = res.replace(/^(.*?可|.*?(is|as|translated to|translation):)\s*/i, '');
-                    res = res.replace(new RegExp(`^.*?${chunk.substring(0, 20)}.*?as:\\s*`, 'i'), '');
-                    res = res.replace(/^(Target|Translation)\s*\(.*?\):\s*/i, '');
-                    const stopIdx = res.indexOf('***');
-                    if (stopIdx !== -1) res = res.substring(0, stopIdx);
-                    return res.trim();
-                };
+                    output = await generator(prompt, {
+                        max_new_tokens: 512,
+                        temperature: 0.1,
+                        do_sample: false,
+                        return_full_text: false,
+                        callback_function: (x: any) => {
+                            if (currentAbortController?.signal.aborted) {
+                                throw new Error("AbortError");
+                            }
+                        }
+                    } as any);
 
-                chunkTranslation = cleanFinal((output as any)[0].generated_text);
+                    const cleanFinal = (t: string) => {
+                        let res = t;
+                        if (res.startsWith(prompt)) res = res.substring(prompt.length);
+                        res = res.replace(/^(.*?可|.*?(is|as|translated to|translation):)\s*/i, '');
+                        res = res.replace(new RegExp(`^.*?${chunk.substring(0, 20)}.*?as:\\s*`, 'i'), '');
+                        res = res.replace(/^(Target|Translation)\s*\(.*?\):\s*/i, '');
+                        const stopIdx = res.indexOf('***');
+                        if (stopIdx !== -1) res = res.substring(0, stopIdx);
+                        return res.trim();
+                    };
+
+                    chunkTranslation = cleanFinal((output as any)[0].generated_text);
+                } else {
+                    // NLLB mode
+                    const src_code = src.nllbCode;
+                    const tgt_code = tgt.nllbCode;
+
+                    output = await generator(chunk, {
+                        src_lang: src_code,
+                        tgt_lang: tgt_code,
+                        max_new_tokens: 512,
+                        callback_function: (x: any) => {
+                            if (currentAbortController?.signal.aborted) {
+                                throw new Error("AbortError");
+                            }
+                        }
+                    } as any);
+
+                    chunkTranslation = (output as any)[0].translation_text.trim();
+                }
 
                 fullTranslation += (fullTranslation ? "\n\n" : "") + chunkTranslation;
                 lastOutput = fullTranslation;

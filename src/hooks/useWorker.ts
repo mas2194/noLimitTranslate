@@ -47,9 +47,9 @@ export function useWorker() {
         };
     }, [initializeWorker]);
 
-    const loadModel = useCallback(() => {
+    const loadModel = useCallback((modelId: 'gemma' | 'nllb') => {
         if (!workerRef.current) return;
-        workerRef.current.postMessage({ type: 'load' });
+        workerRef.current.postMessage({ type: 'load', data: { modelId } });
     }, []);
 
     const translate = useCallback((text: string, src_lang: string, tgt_lang: string) => {
